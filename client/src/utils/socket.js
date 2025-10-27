@@ -30,3 +30,13 @@ export const subscribeToCrowdUpdates = (callback) => {
 export const unsubscribeToCrowdUpdates = () => {
   socket.off('crowdUpdate');
 };
+
+export const subscribeToMedia = (callback) => {
+  socket.on('media', (payload) => {
+    callback(payload);
+  });
+};
+
+export const unsubscribeToMedia = () => {
+  socket.off('media');
+};

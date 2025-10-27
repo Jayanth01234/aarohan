@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { connectSocket, subscribeToCrowdUpdates, unsubscribeToCrowdUpdates } from '../utils/socket';
+import { connectSocket, subscribeToCrowdUpdates, unsubscribeToCrowdUpdates, subscribeToMedia, unsubscribeToMedia } from '../utils/socket';
 
 const CrowdMap = ({ interactive = true }) => {
   const svgRef = useRef();
@@ -9,6 +9,7 @@ const CrowdMap = ({ interactive = true }) => {
     { x: 300, y: 200, density: 0 },
     { x: 300, y: 100, density: 0 },
   ]);
+  const [media, setMedia] = useState(null); // { url, type }
 
   useEffect(() => {
     // Connect to Socket.IO
@@ -22,13 +23,20 @@ const CrowdMap = ({ interactive = true }) => {
       }));
       setCrowdData(newCrowdData);
     });
+    subscribeToMedia((payload) => {
+      if (payload && payload.url) {
+        setMedia({ url: payload.url, type: payload.type || '' });
+      }
+    });
 
     return () => {
       unsubscribeToCrowdUpdates();
+      unsubscribeToMedia();
     };
   }, []);
   
   useEffect(() => {
+    if (media) return; // Don't draw heatmap when media preview is active
     // Basic temple layout
     const width = 600;
     const height = 400;
@@ -70,11 +78,21 @@ const CrowdMap = ({ interactive = true }) => {
       .attr('fill', d => d3.interpolateRdYlGn(1 - d.density))
       .attr('opacity', 0.6);
       
-  }, [interactive]);
+  }, [interactive, media]);
 
   return (
     <div className="relative">
-      <svg ref={svgRef} className="w-full h-auto"></svg>
+      {media ? (
+        <div className="w-full">
+          {media.type?.startsWith('video/') ? (
+            <video src={media.url} className="w-full h-auto" controls autoPlay loop muted />
+          ) : (
+            <img src={media.url} alt="CV preview" className="w-full h-auto" />
+          )}
+        </div>
+      ) : (
+        <svg ref={svgRef} className="w-full h-auto"></svg>
+      )}
     </div>
   );
 };
