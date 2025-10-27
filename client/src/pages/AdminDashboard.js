@@ -143,21 +143,30 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Temple Crowd Management Dashboard</h1>
+    <div className="container mx-auto px-4 py-10">
+      <div className="text-center mb-12">
+        <h1 className="text-5xl font-extrabold mb-4 gradient-text">Temple Crowd Management Dashboard</h1>
+        <p className="text-xl text-gray-600">Real-time monitoring and analytics</p>
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Live Crowd Map</h2>
+        <div className="card-modern">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-3xl">🗺️</span>
+            <h2 className="text-2xl font-bold text-gray-800">Live Crowd Map</h2>
+          </div>
           <CrowdMap />
         </div>
         
-        <div className="space-y-8">
+        <div className="space-y-6">
           <CrowdMetrics data={crowdData} />
           <AlertPanel alerts={crowdData.alerts} />
           
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">CV Test</h2>
+          <div className="card-modern">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-3xl">🔍</span>
+              <h2 className="text-2xl font-bold text-gray-800">CV Analysis</h2>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <input 
                 type="file" 
@@ -168,9 +177,9 @@ const AdminDashboard = () => {
               <button
                 onClick={onUpload}
                 disabled={!file || uploading}
-                className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+                className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploading ? 'Uploading...' : 'Analyze'}
+                {uploading ? 'Uploading...' : '🔍 Analyze'}
               </button>
               <label className="flex items-center gap-2 text-sm">
                 <input 

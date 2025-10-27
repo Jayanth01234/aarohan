@@ -52,24 +52,33 @@ const BookingForm = ({ selectedTime }) => {
   if (booking) {
     return (
       <div className="text-center">
-        <h3 className="text-lg font-semibold mb-4 text-green-600">Booking Confirmed!</h3>
-        <p className="mb-2 text-sm text-gray-600">Reference: {booking.bookingRef}</p>
-        <div className="bg-white p-4 rounded-lg inline-block mb-4 shadow-sm">
-          <QRCode value={booking.qrData} size={200} />
+        <div className="mb-6">
+          <div className="inline-block p-4 rounded-full bg-green-100 mb-4">
+            <span className="text-5xl">✅</span>
+          </div>
+          <h3 className="text-2xl font-bold text-green-600 mb-2">Booking Confirmed!</h3>
+          <p className="text-lg text-gray-600 mb-4">Your booking reference: <span className="font-bold text-blue-600">{booking.bookingRef}</span></p>
         </div>
-        <p className="text-sm text-gray-600 mb-4">
-          Show this QR code at the entrance
+        
+        <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-2xl inline-block mb-6 shadow-lg border-2 border-blue-200">
+          <QRCode value={booking.qrData} size={220} />
+        </div>
+        
+        <p className="text-base text-gray-700 mb-6 font-medium">
+          Show this QR code at the entrance for quick entry
         </p>
-        <div className="flex gap-3 justify-center">
+        
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             onClick={() => navigate('/booking')}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="btn-primary flex items-center justify-center gap-2"
           >
+            <span></span>
             View My Bookings
           </button>
           <button
             onClick={() => setBooking(null)}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            className="px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg font-medium shadow-lg hover:shadow-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-200 transform hover:scale-105"
           >
             Make Another Booking
           </button>
@@ -79,34 +88,40 @@ const BookingForm = ({ selectedTime }) => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="block text-sm font-medium text-gray-700">Name</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <span>👤</span> Name
+        </label>
         <input
           type="text"
           name="name"
           required
           value={formData.name}
           onChange={handleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="input-field"
+          placeholder="Enter your full name"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Email</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <span>✉️</span> Email
+        </label>
         <input
           type="email"
           name="email"
           required
           value={formData.email}
           onChange={handleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="input-field"
+          placeholder="your.email@example.com"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">
-          Number of Visitors
+        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <span>👥</span> Number of Visitors
         </label>
         <input
           type="number"
@@ -116,12 +131,14 @@ const BookingForm = ({ selectedTime }) => {
           required
           value={formData.visitors}
           onChange={handleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="input-field"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Date</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <span>📅</span> Date
+        </label>
         <input
           type="date"
           name="date"
@@ -129,26 +146,29 @@ const BookingForm = ({ selectedTime }) => {
           min={new Date().toISOString().split('T')[0]}
           value={formData.date}
           onChange={handleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="input-field"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Time</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <span>⏰</span> Time
+        </label>
         <input
           type="time"
           name="time"
           required
           value={formData.time}
           onChange={handleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="input-field"
         />
       </div>
 
       <button
         type="submit"
-        className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        className="btn-primary w-full flex items-center justify-center gap-2"
       >
+        <span>🎫</span>
         Book Visit
       </button>
     </form>
