@@ -13,8 +13,10 @@ const AdminDashboard = () => {
   });
 
   const [cvResult, setCvResult] = useState(null);
+  const [cvSeries, setCvSeries] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState(null);
+  const [seriesMode, setSeriesMode] = useState(false);
 
   useEffect(() => {
     // Connect to Socket.IO for real-time updates and alerts
@@ -46,17 +48,20 @@ const AdminDashboard = () => {
       setUploading(true);
       const form = new FormData();
       form.append('image', file);
-      const res = await fetch('http://localhost:5000/api/cv/count', {
-        method: 'POST',
-        body: form,
-      });
+      const url = seriesMode ? 'http://localhost:5000/api/cv/count_series' : 'http://localhost:5000/api/cv/count';
+      const res = await fetch(url, { method: 'POST', body: form });
       const data = await res.json();
-      setCvResult(data);
-      if (!res.ok) {
-        throw new Error(data?.error || 'Upload failed');
+      if (seriesMode) {
+        setCvSeries(data);
+        setCvResult(null);
+      } else {
+        setCvResult(data);
+        setCvSeries(null);
       }
+      if (!res.ok) throw new Error((data && data.error) || 'Upload failed');
     } catch (err) {
       setCvResult({ error: err.message || String(err) });
+      setCvSeries(null);
     } finally {
       setUploading(false);
     }
@@ -77,7 +82,7 @@ const AdminDashboard = () => {
           <AlertPanel alerts={crowdData.alerts} />
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold mb-4">CV Test</h2>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <input type="file" accept="image/*,video/*" onChange={onFileChange} className="block" />
               <button
                 onClick={onUpload}
@@ -86,11 +91,42 @@ const AdminDashboard = () => {
               >
                 {uploading ? 'Uploading…' : 'Analyze'}
               </button>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={seriesMode} onChange={e => setSeriesMode(e.target.checked)} />
+                Per-second series (video)
+              </label>
             </div>
             {cvResult && (
               <pre className="mt-4 bg-gray-100 p-3 rounded text-sm overflow-x-auto">
                 {JSON.stringify(cvResult, null, 2)}
               </pre>
+            )}
+            {cvSeries && (
+              <div className="mt-4">
+                <div className="text-sm text-gray-700 mb-2">Frames: {Array.isArray(cvSeries.frames) ? cvSeries.frames.length : 0}</div>
+                <div className="max-h-64 overflow-auto bg-gray-50 rounded border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left">
+                        <th className="py-1 px-2">t(s)</th>
+                        <th className="py-1 px-2">persons</th>
+                        <th className="py-1 px-2">density</th>
+                        <th className="py-1 px-2">overcrowded</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cvSeries.frames?.map((f, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="py-1 px-2">{f.t_seconds}</td>
+                          <td className="py-1 px-2">{f.person_count}</td>
+                          <td className="py-1 px-2">{f.density}</td>
+                          <td className="py-1 px-2">{String(f.overcrowded)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -43,6 +43,20 @@ app.post('/api/cv/count', upload.single('image'), async (req, res) => {
   }
 });
 
+// Per-second CV microservice proxy (series)
+app.post('/api/cv/count_series', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'image file is required (field name: image)' });
+    const form = new FormData();
+    form.append('file', req.file.buffer, { filename: req.file.originalname || 'video.mp4', contentType: req.file.mimetype });
+    const { data } = await axios.post(`${CV_HOST}/count_series`, form, { headers: form.getHeaders(), timeout: 60000 });
+    return res.json(data);
+  } catch (err) {
+    console.error('CV series proxy error', err?.message || err);
+    return res.status(502).json({ error: 'cv_service_unavailable' });
+  }
+});
+
 // Simulated crowd data
 let crowdData = {
   totalVisitors: 0,

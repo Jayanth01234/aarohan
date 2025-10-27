@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 from pathlib import Path
 import torch
+import tempfile
+import os
 
 # --- YOLO internals ---
 from ultralytics.nn.tasks import DetectionModel
@@ -84,12 +86,43 @@ class CountResponse(BaseModel):
 @app.post("/count", response_model=CountResponse)
 async def count_people(file: UploadFile = File(...)):
     data = await file.read()
-    image_array = np.frombuffer(data, np.uint8)
-    frame = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+    # Decide if this is a video or an image by content type or filename
+    filename = file.filename or ""
+    content_type = (file.content_type or "").lower()
+    is_video = content_type.startswith("video/") or any(
+        filename.lower().endswith(ext) for ext in [".mp4", ".avi", ".mov", ".mkv", ".webm"]
+    )
+
+    frame = None
+    if is_video:
+        # Write to a temporary file so OpenCV can read it
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".mp4") as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        try:
+            cap = cv2.VideoCapture(tmp_path)
+            ok, f = cap.read()
+            cap.release()
+            if ok:
+                frame = f
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+    else:
+        # Treat as image
+        image_array = np.frombuffer(data, np.uint8)
+        frame = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
 
     if frame is None:
         return CountResponse(person_count=0, density=0.0, overcrowded=False, width=0, height=0)
 
+    return _analyze_single_frame(frame)
+
+
+def _analyze_single_frame(frame: np.ndarray) -> CountResponse:
     h, w = frame.shape[:2]
     results = model(frame, verbose=False)[0]
 
@@ -113,6 +146,70 @@ async def count_people(file: UploadFile = File(...)):
         width=w,
         height=h,
     )
+
+
+class SeriesItem(BaseModel):
+    t_seconds: float
+    person_count: int
+    density: float
+    overcrowded: bool
+    width: int
+    height: int
+
+
+class SeriesResponse(BaseModel):
+    frames: list[SeriesItem]
+
+
+@app.post("/count_series", response_model=SeriesResponse)
+async def count_series(file: UploadFile = File(...), max_seconds: int = 30):
+    data = await file.read()
+
+    filename = file.filename or ""
+    content_type = (file.content_type or "").lower()
+    is_video = content_type.startswith("video/") or any(
+        filename.lower().endswith(ext) for ext in [".mp4", ".avi", ".mov", ".mkv", ".webm"]
+    )
+
+    # Image: analyze once and return a single item at t=0
+    if not is_video:
+        image_array = np.frombuffer(data, np.uint8)
+        frame = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        if frame is None:
+            return SeriesResponse(frames=[])
+        r = _analyze_single_frame(frame)
+        return SeriesResponse(frames=[SeriesItem(t_seconds=0.0, **r.model_dump())])
+
+    # Video: write temp, sample at 1 fps up to max_seconds
+    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".mp4") as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
+    frames: list[SeriesItem] = []
+    try:
+        cap = cv2.VideoCapture(tmp_path)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 0
+        if fps <= 0:
+            fps = 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        duration = total_frames / fps if fps > 0 else 0
+        seconds_to_process = int(min(max_seconds, max(1, duration))) if duration > 0 else max_seconds
+
+        for s in range(seconds_to_process):
+            frame_index = int(s * fps)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                break
+            r = _analyze_single_frame(frame)
+            frames.append(SeriesItem(t_seconds=float(s), **r.model_dump()))
+        cap.release()
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+    return SeriesResponse(frames=frames)
 
 
 # --- Server start ---
