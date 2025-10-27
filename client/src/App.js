@@ -5,6 +5,7 @@ import VisitorView from './pages/VisitorView';
 import Navbar from './components/Navbar';
 import Simulator from './pages/Simulator';
 import Predict from './pages/Predict';
+import MyBookings from './pages/MyBookings';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/simulator" element={<Simulator />} />
           <Route path="/predict" element={<Predict />} />
+          <Route path="/booking" element={<MyBookings />} />
           <Route path="/" element={<VisitorView />} />
         </Routes>
       </div>
