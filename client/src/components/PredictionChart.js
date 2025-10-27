@@ -21,15 +21,19 @@ ChartJS.register(
   Legend
 );
 
-const PredictionChart = ({ onTimeSelect }) => {
+const PredictionChart = ({ onTimeSelect, valuesOverride }) => {
   const hours = Array.from({ length: 12 }, (_, i) => `${i + 6}:00`);
   
+  const values = Array.isArray(valuesOverride) && valuesOverride.length === hours.length
+    ? valuesOverride
+    : [30, 45, 60, 80, 90, 85, 70, 65, 75, 80, 70, 50];
+
   const data = {
     labels: hours,
     datasets: [
       {
         label: 'Predicted Crowd Level',
-        data: [30, 45, 60, 80, 90, 85, 70, 65, 75, 80, 70, 50],
+        data: values,
         borderColor: 'rgb(75, 192, 192)',
         tension: 0.1
       }

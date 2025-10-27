@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import AdminDashboard from './pages/AdminDashboard';
 import VisitorView from './pages/VisitorView';
 import Navbar from './components/Navbar';
+import Simulator from './pages/Simulator';
+import Predict from './pages/Predict';
 
 function App() {
   return (
@@ -11,6 +13,8 @@ function App() {
         <Navbar />
         <Routes>
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/simulator" element={<Simulator />} />
+          <Route path="/predict" element={<Predict />} />
           <Route path="/" element={<VisitorView />} />
         </Routes>
       </div>
