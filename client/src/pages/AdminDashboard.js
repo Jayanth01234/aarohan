@@ -34,20 +34,6 @@ const AdminDashboard = () => {
         ].slice(0, 20),
       }));
     };
-
-  // Derived values for Evacuation & Resources (top-level scope)
-  const predictedPeakValue = (() => {
-    if (prediction?.predictedCount != null) return Math.max(0, Math.round(Number(prediction.predictedCount)));
-    if (cvSeries?.frames?.length) {
-      return cvSeries.frames.reduce((m, f) => Math.max(m, Number(f.person_count) || 0), 0);
-    }
-    if (cvResult?.person_count != null) return Number(cvResult.person_count) || 0;
-    return crowdData.totalVisitors || 0;
-  })();
-
-  const zonesForStaff = [
-    { id: 'overall', name: 'Overall', current: crowdData.totalVisitors || 0, capacity: 100 }
-  ];
     socket.on('alert', onAlert);
     return () => {
       socket.off('alert', onAlert);
@@ -195,6 +181,19 @@ const AdminDashboard = () => {
       predictedTime: predictTime
     });
   };
+
+  const predictedPeakValue = (() => {
+    if (prediction?.predictedCount != null) return Math.max(0, Math.round(Number(prediction.predictedCount)));
+    if (cvSeries?.frames?.length) {
+      return cvSeries.frames.reduce((m, f) => Math.max(m, Number(f.person_count) || 0), 0);
+    }
+    if (cvResult?.person_count != null) return Number(cvResult.person_count) || 0;
+    return crowdData.totalVisitors || 0;
+  })();
+
+  const zonesForStaff = [
+    { id: 'overall', name: 'Overall', current: crowdData.totalVisitors || 0, capacity: 100 }
+  ];
 
   return (
     <div className="container mx-auto px-4 py-10">

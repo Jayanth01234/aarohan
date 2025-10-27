@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ZoneCard from '../components/ZoneCard';
 
-const SAFE_LIMIT = 150;
+const SAFE_LIMIT = 150; // default for non-mainHall zones
+const MAIN_HALL_CAPACITY = 300;
 
 const initialZones = [
   { id: 'entry', name: 'Entry', count: 80 },
@@ -14,57 +15,88 @@ const Simulator = () => {
   const [zones, setZones] = useState(initialZones);
   const [festivalMode, setFestivalMode] = useState(false);
   const [gatesOpen, setGatesOpen] = useState({ entry: true, mainHall: true, exit: true, parking: true });
+  // Deterministic flow rates (people per tick)
+  const [entryRate, setEntryRate] = useState(30);
+  const [exitRate, setExitRate] = useState(10);
+  const [parkingEvacRate, setParkingEvacRate] = useState(5);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [logs, setLogs] = useState([]);
   const [redirectTarget, setRedirectTarget] = useState('mainHall');
-  const beepRef = useRef(null);
+  const [audioCtx, setAudioCtx] = useState(null);
 
-  useEffect(() => {
-    let ctx;
+  // Initialize AudioContext only after a user gesture
+  const enableSound = async () => {
     try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      gain.gain.setValueAtTime(0, ctx.currentTime);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      beepRef.current = { ctx, osc, gain };
+      let ctx = audioCtx;
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      setAudioCtx(ctx);
     } catch {}
-    return () => {
-      try { beepRef.current?.osc?.stop(); beepRef.current?.ctx?.close(); } catch {}
-    };
-  }, []);
+  };
 
   const overcrowded = useMemo(() => zones.some(z => z.count >= SAFE_LIMIT), [zones]);
 
   const playBeep = () => {
-    const b = beepRef.current;
-    if (!b) return;
-    const t = b.ctx.currentTime;
-    b.gain.gain.cancelScheduledValues(t);
-    b.gain.gain.setValueAtTime(0.0001, t);
-    b.gain.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
-    b.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    if (!audioCtx) return; // require user gesture to enable
+    const ctx = audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    const t = ctx.currentTime;
+    gain.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    osc.stop(t + 0.3);
   };
 
   useEffect(() => {
     const id = setInterval(() => {
       setZones(prev => {
         const mult = festivalMode ? 1.8 : 1.0;
+        const entryFlow = Math.max(0, Math.round((Number(entryRate) || 0) * mult * (gatesOpen.entry ? 1 : 0.3)));
+        const exitFlowRequested = Math.max(0, Math.round((Number(exitRate) || 0) * mult * (gatesOpen.exit ? 1 : 0.3)));
+        const parkingEvac = Math.max(0, Math.round((Number(parkingEvacRate) || 0) * mult * (gatesOpen.parking ? 1 : 0.3)));
+
+        // Clone current counts
+        const current = Object.fromEntries(prev.map(z => [z.id, z.count]));
+        // Entry: show current flow in Entry zone (not accumulated)
+        let entryDisplay = entryFlow;
+
+        // Main Hall: add entry, remove exit
+        const possibleExit = Math.min(exitFlowRequested, current.mainHall);
+        let newMainHall = current.mainHall + entryFlow - possibleExit;
+        newMainHall = Math.max(0, Math.min(MAIN_HALL_CAPACITY, newMainHall));
+
+        // Exit: show current flow that actually exited
+        const exitDisplay = possibleExit;
+
+        // Parking: add exited people, then evacuate
+        let newParking = current.parking + exitDisplay;
+        const actualEvac = Math.min(parkingEvac, newParking);
+        newParking -= actualEvac;
+
+        // Build next state
         const next = prev.map(z => {
-          const gateFactor = gatesOpen[z.id] ? 1 : 0.3;
-          const delta = Math.floor((Math.random() * 16 - 8) * mult * gateFactor);
-          const newCount = Math.max(0, z.count + delta);
-          return { ...z, count: newCount };
+          if (z.id === 'entry') return { ...z, count: entryDisplay };
+          if (z.id === 'mainHall') return { ...z, count: newMainHall };
+          if (z.id === 'exit') return { ...z, count: exitDisplay };
+          if (z.id === 'parking') return { ...z, count: newParking };
+          return z;
         });
+
         return next;
       });
       setLastUpdated(new Date());
     }, 3000);
     return () => clearInterval(id);
-  }, [festivalMode, gatesOpen]);
+  }, [festivalMode, gatesOpen, entryRate, exitRate, parkingEvacRate]);
 
   useEffect(() => {
     const entry = { time: new Date().toISOString(), zones: Object.fromEntries(zones.map(z => [z.id, z.count])) };
@@ -111,7 +143,12 @@ const Simulator = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {zones.map(z => (
-          <ZoneCard key={z.id} name={z.name} count={z.count} limit={SAFE_LIMIT} />
+          <ZoneCard
+            key={z.id}
+            name={z.name}
+            count={z.count}
+            limit={z.id === 'mainHall' ? MAIN_HALL_CAPACITY : SAFE_LIMIT}
+          />
         ))}
       </div>
 
@@ -119,18 +156,44 @@ const Simulator = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="text-lg font-semibold">Controls</div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={festivalMode} onChange={e => setFestivalMode(e.target.checked)} />
-              Festival/Weekend mode
-            </label>
+            <div className="flex items-center gap-3">
+              {!audioCtx || audioCtx.state !== 'running' ? (
+                <button onClick={enableSound} className="px-3 py-2 rounded bg-amber-500 text-white text-sm">Enable Sound</button>
+              ) : null}
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={festivalMode} onChange={e => setFestivalMode(e.target.checked)} />
+                Festival/Weekend mode
+              </label>
+            </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2">
               {zones.map(z => (
                 <button key={z.id} onClick={() => toggleGate(z.id)} className={`px-3 py-2 rounded border text-sm ${gatesOpen[z.id] ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>
                   {z.name} {gatesOpen[z.id] ? 'Open' : 'Closed'}
                 </button>
               ))}
+            </div>
+            <div>
+              <div className="text-sm font-medium mb-2">Flow rates (people per tick)</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="flex flex-col text-sm">
+                  <span className="mb-1">Entry rate → Main Hall</span>
+                  <input type="number" className="border rounded px-2 py-1" value={entryRate}
+                    onChange={(e) => setEntryRate(Number(e.target.value))} />
+                </label>
+                <label className="flex flex-col text-sm">
+                  <span className="mb-1">Exit rate ← Main Hall</span>
+                  <input type="number" className="border rounded px-2 py-1" value={exitRate}
+                    onChange={(e) => setExitRate(Number(e.target.value))} />
+                </label>
+                <label className="flex flex-col text-sm">
+                  <span className="mb-1">Parking evacuation</span>
+                  <input type="number" className="border rounded px-2 py-1" value={parkingEvacRate}
+                    onChange={(e) => setParkingEvacRate(Number(e.target.value))} />
+                </label>
+              </div>
+              <div className="text-xs text-gray-500 mt-2">Gates affect effective flow: Open = 100%, Closed = 30%. Festival mode multiplies flows.</div>
             </div>
             <div className="flex items-center gap-2">
               <select value={redirectTarget} onChange={e => setRedirectTarget(e.target.value)} className="border rounded px-2 py-2">
