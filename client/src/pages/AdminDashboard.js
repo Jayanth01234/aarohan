@@ -3,6 +3,7 @@ import CrowdMap from '../components/CrowdMap';
 import CrowdMetrics from '../components/CrowdMetrics';
 import AlertPanel from '../components/AlertPanel';
 import TimeSeriesChart from '../components/TimeSeriesChart';
+import EvacuationPanel from '../components/EvacuationPanel';
 import { connectSocket } from '../utils/socket';
 import { socket } from '../utils/socket';
 
@@ -33,11 +34,64 @@ const AdminDashboard = () => {
         ].slice(0, 20),
       }));
     };
+
+  // Derived values for Evacuation & Resources (top-level scope)
+  const predictedPeakValue = (() => {
+    if (prediction?.predictedCount != null) return Math.max(0, Math.round(Number(prediction.predictedCount)));
+    if (cvSeries?.frames?.length) {
+      return cvSeries.frames.reduce((m, f) => Math.max(m, Number(f.person_count) || 0), 0);
+    }
+    if (cvResult?.person_count != null) return Number(cvResult.person_count) || 0;
+    return crowdData.totalVisitors || 0;
+  })();
+
+  const zonesForStaff = [
+    { id: 'overall', name: 'Overall', current: crowdData.totalVisitors || 0, capacity: 100 }
+  ];
     socket.on('alert', onAlert);
     return () => {
       socket.off('alert', onAlert);
     };
   }, []);
+
+  // Update Current Metrics based on CV analysis results (top-level effect)
+  useEffect(() => {
+    const DENSITY_THRESHOLD = 0.25; // must match server threshold
+
+    const toCrowdData = (analysis) => {
+      if (!analysis) return null;
+      const personCount = Number(analysis.person_count) || 0;
+      const density = Number(analysis.density) || 0;
+      const occupancyPct = Math.max(0, Math.min(100, Math.round((density / DENSITY_THRESHOLD) * 100)));
+      return {
+        totalVisitors: personCount,
+        zones: [
+          {
+            id: 'overall',
+            name: 'Overall',
+            current: occupancyPct,
+            capacity: 100,
+          },
+        ],
+      };
+    };
+
+    if (cvResult && !cvResult.error) {
+      const mapped = toCrowdData(cvResult);
+      if (mapped) setCrowdData((prev) => ({ ...prev, ...mapped, alerts: prev.alerts }));
+      return;
+    }
+
+    if (cvSeries?.frames?.length) {
+      const last = cvSeries.frames[cvSeries.frames.length - 1];
+      const mapped = toCrowdData(last);
+      if (mapped) {
+        const totalVisitors = cvSeries.frames.reduce((sum, f) => sum + (Number(f.person_count) || 0), 0);
+        mapped.totalVisitors = totalVisitors;
+        setCrowdData((prev) => ({ ...prev, ...mapped, alerts: prev.alerts }));
+      }
+    }
+  }, [cvResult, cvSeries]);
 
   const onFileChange = (e) => {
     const f = e.target.files?.[0];
@@ -161,7 +215,7 @@ const AdminDashboard = () => {
         <div className="space-y-6">
           <CrowdMetrics data={crowdData} />
           <AlertPanel alerts={crowdData.alerts} />
-          
+
           <div className="card-modern">
             <div className="flex items-center gap-3 mb-6">
               <span className="text-3xl">🔍</span>
@@ -289,6 +343,14 @@ const AdminDashboard = () => {
             )}
           </div>
         </div>
+      </div>
+      {/* Evacuation & Resource Suggestions */}
+      <div className="mt-8">
+        <EvacuationPanel
+          totalPeople={crowdData.totalVisitors || 0}
+          zones={zonesForStaff}
+          predictedPeak={predictedPeakValue}
+        />
       </div>
     </div>
   );
