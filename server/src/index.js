@@ -78,6 +78,99 @@ app.post('/api/cv/count_series', upload.single('image'), async (req, res) => {
   }
 });
 
+// Predictive analysis utilities
+const {
+  getDayPredictions,
+  getDateRangePredictions,
+  getSpecialDayInfo,
+  SPECIAL_DAYS_2025
+} = require('./utils/specialDays');
+
+// Predictive Analysis API Endpoints
+app.get('/api/predict/day', (req, res) => {
+  try {
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'date parameter is required (format: YYYY-MM-DD)' });
+    }
+    
+    const targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({ error: 'invalid date format' });
+    }
+    
+    const predictions = getDayPredictions(targetDate);
+    res.json(predictions);
+  } catch (err) {
+    console.error('Prediction error:', err);
+    res.status(500).json({ error: 'internal_server_error' });
+  }
+});
+
+app.get('/api/predict/range', (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate parameters are required' });
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'invalid date format' });
+    }
+    
+    if (start > end) {
+      return res.status(400).json({ error: 'startDate must be before endDate' });
+    }
+    
+    // Limit to 90 days
+    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    if (daysDiff > 90) {
+      return res.status(400).json({ error: 'date range cannot exceed 90 days' });
+    }
+    
+    const predictions = getDateRangePredictions(start, end);
+    res.json({ predictions });
+  } catch (err) {
+    console.error('Range prediction error:', err);
+    res.status(500).json({ error: 'internal_server_error' });
+  }
+});
+
+app.get('/api/predict/special-days', (req, res) => {
+  try {
+    const { year, month } = req.query;
+    
+    // If year and month provided, filter by that month
+    if (year && month) {
+      const targetYear = parseInt(year);
+      const targetMonth = parseInt(month);
+      
+      const filtered = Object.entries(SPECIAL_DAYS_2025)
+        .filter(([dateStr]) => {
+          const [y, m] = dateStr.split('-').map(Number);
+          return y === targetYear && m === targetMonth;
+        })
+        .map(([date, info]) => ({ date, ...info }));
+      
+      return res.json({ specialDays: filtered });
+    }
+    
+    // Return all special days
+    const allSpecialDays = Object.entries(SPECIAL_DAYS_2025)
+      .map(([date, info]) => ({ date, ...info }));
+    
+    res.json({ specialDays: allSpecialDays });
+  } catch (err) {
+    console.error('Special days error:', err);
+    res.status(500).json({ error: 'internal_server_error' });
+  }
+});
+
 // Simulated crowd data
 let crowdData = {
   totalVisitors: 0,
