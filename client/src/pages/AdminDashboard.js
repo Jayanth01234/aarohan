@@ -22,6 +22,10 @@ const AdminDashboard = () => {
   const [prediction, setPrediction] = useState(null);
   const [predictionTime, setPredictionTime] = useState(5); // Default prediction for next 5 seconds
 
+  // Client-side crowd rule: require at least N people to consider 'crowded'
+  const CLIENT_DENSITY_THRESHOLD = 0.25; // keep in sync with server if changed
+  const MIN_PEOPLE_FOR_CROWD = 8;
+
   useEffect(() => {
     // Connect to Socket.IO for real-time updates and alerts
     connectSocket();
@@ -42,7 +46,7 @@ const AdminDashboard = () => {
 
   // Update Current Metrics based on CV analysis results (top-level effect)
   useEffect(() => {
-    const DENSITY_THRESHOLD = 0.25; // must match server threshold
+    const DENSITY_THRESHOLD = CLIENT_DENSITY_THRESHOLD; // must match server threshold
 
     const toCrowdData = (analysis) => {
       if (!analysis) return null;
@@ -64,7 +68,18 @@ const AdminDashboard = () => {
 
     if (cvResult && !cvResult.error) {
       const mapped = toCrowdData(cvResult);
-      if (mapped) setCrowdData((prev) => ({ ...prev, ...mapped, alerts: prev.alerts }));
+      if (mapped) {
+        // Generate alert for single image if crowded and meets minimum people
+        const isCrowded = (Number(cvResult.person_count) || 0) >= MIN_PEOPLE_FOR_CROWD && ((Number(cvResult.density) || 0) >= DENSITY_THRESHOLD || cvResult.overcrowded === true);
+        setCrowdData((prev) => ({
+          ...prev,
+          ...mapped,
+          alerts: isCrowded ? [
+            { id: Date.now(), type: 'alert', severity: 'warning', message: 'Crowding detected in latest image', payload: { person_count: cvResult.person_count, density: cvResult.density } },
+            ...prev.alerts,
+          ].slice(0, 20) : prev.alerts
+        }));
+      }
       return;
     }
 
@@ -76,7 +91,18 @@ const AdminDashboard = () => {
         const sum = cvSeries.frames.reduce((acc, f) => acc + (Number(f.person_count) || 0), 0);
         const avg = n > 0 ? Math.round(sum / n) : 0;
         mapped.totalVisitors = avg;
-        setCrowdData((prev) => ({ ...prev, ...mapped, alerts: prev.alerts }));
+        // Crowd alert also for series based on last frame with min people constraint
+        const lastPeople = Number(last.person_count) || 0;
+        const lastDense = Number(last.density) || 0;
+        const lastCrowded = lastPeople >= MIN_PEOPLE_FOR_CROWD && (lastDense >= DENSITY_THRESHOLD || last.overcrowded === true);
+        setCrowdData((prev) => ({
+          ...prev,
+          ...mapped,
+          alerts: lastCrowded ? [
+            { id: Date.now(), type: 'alert', severity: 'warning', message: 'Crowding detected in latest video frame', payload: { person_count: lastPeople, density: lastDense } },
+            ...prev.alerts,
+          ].slice(0, 20) : prev.alerts
+        }));
       }
     }
   }, [cvResult, cvSeries]);
@@ -240,17 +266,23 @@ const AdminDashboard = () => {
             </div>
 
             {cvResult && (
-              <pre className="mt-4 bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-                {JSON.stringify(cvResult, null, 2)}
-              </pre>
+              <div className="mt-4 bg-gray-50 p-3 rounded text-sm">
+                <div><strong>People:</strong> {Number(cvResult.person_count) || 0}</div>
+                <div><strong>Density:</strong> {((Number(cvResult.density) || 0) * 100).toFixed(1)}%</div>
+                <div><strong>Status:</strong> {((Number(cvResult.person_count) || 0) >= MIN_PEOPLE_FOR_CROWD && ((Number(cvResult.density) || 0) >= CLIENT_DENSITY_THRESHOLD || cvResult.overcrowded)) ? 'Crowded' : 'Normal'}</div>
+              </div>
             )}
 
             {cvSeries && (
               <div className="mt-4">
                 <div className="text-sm text-gray-700 mb-2">
                   Frames: {cvSeries.frames?.length || 0} | 
-                  Duration: {cvSeries.frames?.length > 0 ? 
-                    `${cvSeries.frames[cvSeries.frames.length - 1].t_seconds.toFixed(1)}s` : 'N/A'}
+                  Duration: {cvSeries.frames?.length > 0 ? `${cvSeries.frames[cvSeries.frames.length - 1].t_seconds.toFixed(1)}s` : 'N/A'} |
+                  Avg people: {(() => {
+                    const n = cvSeries.frames?.length || 0; if (!n) return 0;
+                    const sum = cvSeries.frames.reduce((acc, f) => acc + (Number(f.person_count) || 0), 0);
+                    return Math.round(sum / n);
+                  })()}
                 </div>
 
                 {/* Time Series Chart */}
@@ -318,17 +350,20 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {cvSeries.frames?.map((f, i) => (
+                        {cvSeries.frames?.map((f, i) => {
+                          const isCrowded = (Number(f.person_count) || 0) >= MIN_PEOPLE_FOR_CROWD && (((Number(f.density) || 0) >= CLIENT_DENSITY_THRESHOLD) || f.overcrowded === true);
+                          return (
                           <tr key={i} className="border-t hover:bg-gray-50">
                             <td className="py-1 px-2">{f.t_seconds.toFixed(1)}</td>
                             <td className="py-1 px-2">{f.person_count}</td>
                             <td className="py-1 px-2">{(f.density * 100).toFixed(1)}%</td>
                             <td className="py-1 px-2">
-                              <span className={`inline-block w-3 h-3 rounded-full mr-1 ${f.overcrowded ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                              {f.overcrowded ? 'Crowded' : 'Normal'}
+                              <span className={`inline-block w-3 h-3 rounded-full mr-1 ${isCrowded ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                              {isCrowded ? 'Crowded' : 'Normal'}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
