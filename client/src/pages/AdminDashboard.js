@@ -72,8 +72,10 @@ const AdminDashboard = () => {
       const last = cvSeries.frames[cvSeries.frames.length - 1];
       const mapped = toCrowdData(last);
       if (mapped) {
-        const totalVisitors = cvSeries.frames.reduce((sum, f) => sum + (Number(f.person_count) || 0), 0);
-        mapped.totalVisitors = totalVisitors;
+        const n = cvSeries.frames.length;
+        const sum = cvSeries.frames.reduce((acc, f) => acc + (Number(f.person_count) || 0), 0);
+        const avg = n > 0 ? Math.round(sum / n) : 0;
+        mapped.totalVisitors = avg;
         setCrowdData((prev) => ({ ...prev, ...mapped, alerts: prev.alerts }));
       }
     }
@@ -182,14 +184,7 @@ const AdminDashboard = () => {
     });
   };
 
-  const predictedPeakValue = (() => {
-    if (prediction?.predictedCount != null) return Math.max(0, Math.round(Number(prediction.predictedCount)));
-    if (cvSeries?.frames?.length) {
-      return cvSeries.frames.reduce((m, f) => Math.max(m, Number(f.person_count) || 0), 0);
-    }
-    if (cvResult?.person_count != null) return Number(cvResult.person_count) || 0;
-    return crowdData.totalVisitors || 0;
-  })();
+  const predictedPeakValue = crowdData.totalVisitors || 0;
 
   const zonesForStaff = [
     { id: 'overall', name: 'Overall', current: crowdData.totalVisitors || 0, capacity: 100 }
