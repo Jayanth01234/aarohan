@@ -52,13 +52,14 @@ const MyBookings = () => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-        {bookings.map((booking) => (
+        {bookings.map((booking, index) => (
           <div key={booking.bookingRef} className="card-modern card-shadow-hover transition-transform hover:scale-105">
             <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-gray-100">
               <div>
                 <div className="inline-block px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold text-sm mb-2">
                   {booking.bookingRef}
                 </div>
+                <div className="text-xs text-gray-600 mb-1">Queue No: <span className="font-semibold">{index + 1}</span></div>
                 <h3 className="text-lg font-bold text-gray-800">{booking.name}</h3>
               </div>
               <button
